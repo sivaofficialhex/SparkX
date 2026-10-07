@@ -39,7 +39,6 @@ button{font:inherit;color:inherit;cursor:pointer}
 #log{width:100%;margin-top:10px;flex:1;overflow-y:auto;max-height:28vh;padding:6px 2px;scroll-behavior:smooth}
 .m{margin:0 0 12px}.m b{display:block;font-size:.68rem;letter-spacing:.18em;color:var(--dim);font-weight:600}
 .m.sx b{color:var(--b)}.m p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
-
 .panel{position:fixed;inset:auto 0 0 0;max-width:640px;margin:0 auto;background:rgba(18,16,40,.92);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:20px 20px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);display:none}
 .panel.open{display:block}.panel label{display:block;margin:10px 0 4px;color:var(--dim);font-size:.85rem}
 .panel select,.panel input[type=range]{width:100%}.panel select{background:#0f0e22;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px}
@@ -78,21 +77,20 @@ const showErr=t=>{errEl.textContent=t||'';};
 const store=(k,v)=>{try{localStorage.setItem('sx_'+k,v)}catch{}},load=(k,d)=>{try{return localStorage.getItem('sx_'+k)??d}catch{return d}};
 function add(who,text){const d=document.createElement('div');d.className='m '+(who==='YOU'?'you':'sx');
  const b=document.createElement('b');b.textContent=who;const p=document.createElement('p');p.textContent=text;d.append(b,p);log.append(d);log.scrollTop=log.scrollHeight;}
-const stripMd=t=>t.replace(/`[\s\S]*?```/g,' ').replace(/`([^`]*)`/g,'$1').replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/(\*\*|__|\*|_|~~)/g,'').replace(/^\s*[-*+•]\s+/gm,'').replace(/^\s*>\s?/gm,'').replace(/\s+/g,' ').trim();
+const stripMd=t=>t.replace(/```[\s\S]*?```/g,' ').replace(/`([^`]*)`/g,'$1').replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/(\*\*|__|\*|_|~~)/g,'').replace(/^\s*[-*+•]\s+/gm,'').replace(/^\s*>\s?/gm,'').replace(/\s+/g,' ').trim();
 
 // ---- TTS ----
 function loadVoices(){voices=synth?synth.getVoices():[];const sel=$('voice'),cur=load('voice','');sel.innerHTML='';
  const auto=new Option('Auto (best match)','');sel.add(auto);
  voices.forEach((v,i)=>sel.add(new Option(`${v.name} (${v.lang})`,v.voiceURI)));sel.value=cur;}
 if(synth){loadVoices();synth.onvoiceschanged=loadVoices;}
-
 function pickVoice(text){const uri=$('voice').value;if(uri)return voices.find(v=>v.voiceURI===uri);
  const ta=/[\u0B80-\u0BFF]/.test(text);const pref=ta?['ta']:['en-IN','en'];
  for(const p of pref){const v=voices.find(v=>v.lang.startsWith(p));if(v)return v;}return null;}
 function stopSpeaking(){if(synth){synth.cancel();}if(state==='speaking')set('idle');}
 function speak(text){
  const clean=stripMd(text);
- if(!synth!clean!$('auto').checked){set('idle');return;}
+ if(!synth||!clean||!$('auto').checked){set('idle');return;}
  try{synth.cancel();const u=new SpeechSynthesisUtterance(clean);const v=pickVoice(clean);
   if(v){u.voice=v;u.lang=v.lang;}else if(/[\u0B80-\u0BFF]/.test(clean))u.lang='ta-IN';
   u.rate=+$('rate').value;u.volume=+$('vol').value;
@@ -139,7 +137,7 @@ function startListening(){
  try{rec.start();}catch{rec=null;set('idle');showErr('Could not start the microphone. Please try again.');}
 }
 function cancelListening(){cancelled=true;if(rec)try{rec.abort()}catch{}}
-mic.addEventListener('click',()=>{ if(state==='idle'state==='speaking'state==='listening')startListening(); });
+mic.addEventListener('click',()=>{ if(state==='idle'||state==='speaking'||state==='listening')startListening(); });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){cancelListening();stopSpeaking();if(ctrl)ctrl.abort();$('panel').classList.remove('open');}
  if(e.code==='Space'&&document.activeElement===document.body){e.preventDefault();startListening();}});
 
