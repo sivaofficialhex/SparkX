@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SparkX — Talk. Listen. Understand.</title>
+<meta name="description" content="SparkX is a voice-first AI companion that listens, understands and responds naturally.">
+<meta property="og:title" content="SparkX — Talk. Listen. Understand.">
+<meta property="og:description" content="SparkX is a voice-first AI companion that listens, understands and responds naturally.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#07070f">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<style>
+:root{--bg:#07070f;--fg:#ecebff;--dim:#9a98c4;--a:#7c6cff;--b:#22d3ee;--glass:rgba(255,255,255,.06);--line:rgba(255,255,255,.12)}
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:radial-gradient(ellipse at 50% 30%,#14122e,var(--bg) 70%);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow-x:hidden}
+main{min-height:100%;max-width:640px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 14px) 18px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;align-items:center}
+header{width:100%;display:flex;justify-content:space-between;align-items:center}
+h1{font-size:1.1rem;margin:0;letter-spacing:.08em}h1 span{color:var(--dim);font-weight:400;font-size:.8rem;letter-spacing:.02em;margin-left:8px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--b);outline-offset:3px}
+.icon{background:var(--glass);border:1px solid var(--line);border-radius:12px;padding:8px 12px;backdrop-filter:blur(10px)}
+.stage{flex:0 0 auto;margin:4vh 0 1vh;display:grid;place-items:center;width:min(62vw,300px);aspect-ratio:1}
+.orb{width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 35% 30%,#d8d2ff,var(--a) 40%,#1e1b4b 85%);box-shadow:0 0 60px 10px rgba(124,108,255,.45),0 0 140px 40px rgba(34,211,238,.15);transition:box-shadow .6s,filter .6s;animation:breathe 5s ease-in-out infinite}
+.orb[data-s=listening]{animation:pulse 1.1s ease-in-out infinite;box-shadow:0 0 80px 20px rgba(34,211,238,.55),0 0 160px 50px rgba(124,108,255,.3)}
+.orb[data-s=transcribing],.orb[data-s=thinking]{animation:spin 1.6s linear infinite;background:conic-gradient(from 0deg,var(--a),var(--b),#e879f9,var(--a));filter:blur(1px) saturate(1.2)}
+.orb[data-s=speaking]{animation:talk .55s ease-in-out infinite;box-shadow:0 0 90px 25px rgba(232,121,249,.5),0 0 170px 55px rgba(124,108,255,.35)}
+@keyframes breathe{50%{transform:scale(1.05)}}
+@keyframes pulse{50%{transform:scale(1.13)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes talk{0%,100%{transform:scale(1)}30%{transform:scale(1.1)}60%{transform:scale(.97)}}
+#status{margin:14px 0 2px;font-size:1.15rem;letter-spacing:.04em;min-height:1.7em}
+#err{color:#fda4af;min-height:1.4em;text-align:center;font-size:.9rem;margin:0 0 6px}
+#mic{width:84px;height:84px;border-radius:50%;border:1px solid var(--line);background:linear-gradient(135deg,var(--a),var(--b));display:grid;place-items:center;box-shadow:0 0 30px rgba(124,108,255,.6);transition:transform .15s,box-shadow .3s,opacity .3s}
+#mic:active{transform:scale(.92)}#mic:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+#mic[aria-pressed=true]{animation:pulse 1.1s infinite;box-shadow:0 0 50px rgba(34,211,238,.8)}
+#mic svg{width:34px;height:34px;fill:#fff}
+#live{color:var(--dim);font-style:italic;min-height:1.5em;text-align:center;margin:12px 0 0}
+#log{width:100%;margin-top:10px;flex:1;overflow-y:auto;max-height:28vh;padding:6px 2px;scroll-behavior:smooth}
+.m{margin:0 0 12px}.m b{display:block;font-size:.68rem;letter-spacing:.18em;color:var(--dim);font-weight:600}
+.m.sx b{color:var(--b)}.m p{margin:2px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+
+.panel{position:fixed;inset:auto 0 0 0;max-width:640px;margin:0 auto;background:rgba(18,16,40,.92);backdrop-filter:blur(18px);border:1px solid var(--line);border-radius:20px 20px 0 0;padding:18px 18px calc(env(safe-area-inset-bottom) + 18px);display:none}
+.panel.open{display:block}.panel label{display:block;margin:10px 0 4px;color:var(--dim);font-size:.85rem}
+.panel select,.panel input[type=range]{width:100%}.panel select{background:#0f0e22;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:8px}
+.row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.row button{flex:1}
+</style>
+</head>
+<body>
+<main>
+<header><h1>SPARKX<span>Talk. Listen. Understand.</span></h1><button class="icon" id="gear" aria-label="Open settings" aria-expanded="false">⚙</button></header>
+<div class="stage"><div class="orb" id="orb" data-s="idle" role="img" aria-label="SparkX orb"></div></div>
+<div id="status" role="status" aria-live="polite">Tap to talk</div>
+<p id="err" role="alert"></p>
+<button id="mic" aria-label="Tap to talk" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.9V22h2v-3.1A8 8 0 0 0 20 11z"/></svg></button>
+<p id="live" aria-live="polite"></p>
+<section id="log" aria-label="Conversation" aria-live="polite"></section>
+<section class="panel" id="panel" aria-label="Settings">
+<label for="voice">Voice</label><select id="voice"></select>
+<label for="rate">Speech rate</label><input id="rate" type="range" min="0.6" max="1.6" step="0.1" value="1">
+<label for="vol">Volume</label><input id="vol" type="range" min="0" max="1" step="0.05" value="1">
+<label><input id="auto" type="checkbox" checked> Auto-speak replies</label>
+<div class="row"><button class="icon" id="stop">Stop speaking</button><button class="icon" id="clear">Clear conversation</button><button class="icon" id="close">Close</button></div>
+</section>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const orb=$('orb'),statusEl=$('status'),errEl=$('err'),mic=$('mic'),live=$('live'),log=$('log');
+const LABEL={idle:'Tap to talk',listening:'Listening…',transcribing:'Transcribing…',thinking:'Thinking…',speaking:'Speaking…'};
+let state='idle',history=[],rec=null,heard='',cancelled=false,voices=[],ctrl=null,silenceT=null;
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const synth=window.speechSynthesis;
+const set=s=>{state=s;orb.dataset.s=s;statusEl.textContent=LABEL[s];mic.setAttribute('aria-pressed',s==='listening');
+ mic.disabled=s==='transcribing'||s==='thinking';
+ mic.setAttribute('aria-label',s==='listening'?'Listening, tap to stop':s==='speaking'?'Tap to interrupt and talk':'Tap to talk');};
+const showErr=t=>{errEl.textContent=t||'';};
+const store=(k,v)=>{try{localStorage.setItem('sx_'+k,v)}catch{}},load=(k,d)=>{try{return localStorage.getItem('sx_'+k)??d}catch{return d}};
+function add(who,text){const d=document.createElement('div');d.className='m '+(who==='YOU'?'you':'sx');
+ const b=document.createElement('b');b.textContent=who;const p=document.createElement('p');p.textContent=text;d.append(b,p);log.append(d);log.scrollTop=log.scrollHeight;}
+const stripMd=t=>t.replace(/`[\s\S]*?```/g,' ').replace(/`([^`]*)`/g,'$1').replace(/!?\[([^\]]*)\]\([^)]*\)/g,'$1').replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/(\*\*|__|\*|_|~~)/g,'').replace(/^\s*[-*+•]\s+/gm,'').replace(/^\s*>\s?/gm,'').replace(/\s+/g,' ').trim();
+
+// ---- TTS ----
+function loadVoices(){voices=synth?synth.getVoices():[];const sel=$('voice'),cur=load('voice','');sel.innerHTML='';
+ const auto=new Option('Auto (best match)','');sel.add(auto);
+ voices.forEach((v,i)=>sel.add(new Option(`${v.name} (${v.lang})`,v.voiceURI)));sel.value=cur;}
+if(synth){loadVoices();synth.onvoiceschanged=loadVoices;}
+
+function pickVoice(text){const uri=$('voice').value;if(uri)return voices.find(v=>v.voiceURI===uri);
+ const ta=/[\u0B80-\u0BFF]/.test(text);const pref=ta?['ta']:['en-IN','en'];
+ for(const p of pref){const v=voices.find(v=>v.lang.startsWith(p));if(v)return v;}return null;}
+function stopSpeaking(){if(synth){synth.cancel();}if(state==='speaking')set('idle');}
+function speak(text){
+ const clean=stripMd(text);
+ if(!synth!clean!$('auto').checked){set('idle');return;}
+ try{synth.cancel();const u=new SpeechSynthesisUtterance(clean);const v=pickVoice(clean);
+  if(v){u.voice=v;u.lang=v.lang;}else if(/[\u0B80-\u0BFF]/.test(clean))u.lang='ta-IN';
+  u.rate=+$('rate').value;u.volume=+$('vol').value;
+  u.onstart=()=>set('speaking');
+  u.onend=()=>{if(state==='speaking')set('idle');};
+  u.onerror=e=>{if(e.error!=='interrupted'&&e.error!=='canceled')showErr('Voice playback failed — the reply is shown as text.');if(state==='speaking')set('idle');};
+  set('speaking');synth.speak(u);
+ }catch{showErr('Voice playback failed — the reply is shown as text.');set('idle');}
+}
+
+// ---- Gemini ----
+async function ask(text){
+ set('thinking');showErr('');ctrl=new AbortController();
+ try{
+  const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},signal:ctrl.signal,body:JSON.stringify({message:text,conversation:history.slice(-20)})});
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||'Something went wrong. Please try again.');
+  history.push({role:'user',text},{role:'model',text:j.reply});
+  add('SPARKX',stripMd(j.reply));speak(j.reply);
+ }catch(e){set('idle');if(e.name!=='AbortError')showErr(e.message==='Failed to fetch'?'No connection. Please check your internet and try again.':e.message);}
+ finally{ctrl=null;}
+}
+function submit(text){text=(text||'').trim();
+ if(!text){set('idle');showErr("I didn't catch that. Tap the mic and try again.");return;}
+ if(state==='thinking')return;add('YOU',text);ask(text);}
+
+// ---- Speech recognition ----
+const ERR={'not-allowed':'Microphone access was blocked. Allow the mic in your browser settings and try again.','service-not-allowed':'Microphone access was blocked. Allow the mic in your browser settings and try again.','audio-capture':'No microphone found. Connect one and try again.','network':'Speech recognition needs an internet connection. Please retry.','no-speech':"I didn't hear anything. Tap the mic and try again.",'language-not-supported':'That language is not supported by this browser.'};
+function startListening(){
+ if(!SR){showErr('Voice input is not supported in this browser. Use Chrome, Edge or Safari, or type below.');showTypeBox();return;}
+ if(state==='listening'){cancelled=false;rec&&rec.stop();return;}
+ if(state==='thinking'||state==='transcribing')return;
+ stopSpeaking();showErr('');heard='';live.textContent='';cancelled=false;
+ try{rec=new SR();}catch{showErr('Could not start voice input.');return;}
+ rec.lang='en-IN';rec.interimResults=true;rec.continuous=false;rec.maxAlternatives=1;
+ let failed=false;
+ rec.onstart=()=>set('listening');
+ rec.onresult=e=>{let fin='',int='';for(const r of e.results){(r.isFinal?(fin+=r[0].transcript):(int+=r[0].transcript));}
+  heard=(fin+int).trim();live.textContent=heard;};
+ rec.onerror=e=>{if(e.error==='aborted')return;failed=true;showErr(ERR[e.error]||'Voice input error. Please try again.');};
+ rec.onend=()=>{const r=rec;rec=null;live.textContent='';
+  if(cancelled||failed){set('idle');return;}
+  set('transcribing');setTimeout(()=>submit(heard),150);};
+ try{rec.start();}catch{rec=null;set('idle');showErr('Could not start the microphone. Please try again.');}
+}
+function cancelListening(){cancelled=true;if(rec)try{rec.abort()}catch{}}
+mic.addEventListener('click',()=>{ if(state==='idle'state==='speaking'state==='listening')startListening(); });
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){cancelListening();stopSpeaking();if(ctrl)ctrl.abort();$('panel').classList.remove('open');}
+ if(e.code==='Space'&&document.activeElement===document.body){e.preventDefault();startListening();}});
+
+// ---- Fallback typing (only when speech recognition unsupported) ----
+function showTypeBox(){if($('tb'))return;const f=document.createElement('div');f.id='tb';f.style.cssText='display:flex;gap:8px;width:100%;margin-top:10px';
+ const i=document.createElement('input');i.setAttribute('aria-label','Type your message');i.placeholder='Type to SparkX…';i.maxLength=2000;
+ i.style.cssText='flex:1;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--glass);color:var(--fg)';
+ const b=document.createElement('button');b.className='icon';b.textContent='Send';
+ const go=()=>{const t=i.value;i.value='';if(state==='idle'&&t.trim())submit(t);};
+ b.onclick=go;i.onkeydown=e=>{if(e.key==='Enter')go();};f.append(i,b);live.after(f);}
+
+// ---- Settings ----
+const panel=$('panel');
+const toggle=o=>{panel.classList.toggle('open',o);$('gear').setAttribute('aria-expanded',o);if(o)$('close').focus();};
+$('gear').onclick=()=>toggle(!panel.classList.contains('open'));$('close').onclick=()=>{toggle(false);$('gear').focus();};
+$('stop').onclick=stopSpeaking;
+$('clear').onclick=()=>{stopSpeaking();cancelListening();if(ctrl)ctrl.abort();history=[];log.innerHTML='';showErr('');set('idle');};
+$('rate').value=load('rate','1');$('vol').value=load('vol','1');$('auto').checked=load('auto','1')==='1';
+$('rate').oninput=e=>store('rate',e.target.value);$('vol').oninput=e=>store('vol',e.target.value);
+$('auto').onchange=e=>{store('auto',e.target.checked?'1':'0');if(!e.target.checked)stopSpeaking();};
+$('voice').onchange=e=>store('voice',e.target.value);
+addEventListener('pagehide',()=>{cancelListening();synth&&synth.cancel();});
+if(!SR)showErr('Voice input is not supported in this browser — you can type instead.'),showTypeBox();
+set('idle');
+})();
+</script>
+</body>
+</html>
