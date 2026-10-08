@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.onrender.sparkx_gv5y.twa",
+        "sha256_cert_fingerprints": ["F1:6D:CC:9F:90:BE:DC:69:6B:48:D8:8D:5E:C4:C9:E9:15:EE:D2:5A:B8:84:3D:3E:22:50:48:E3:DD:7A:7C:AC"]
+      }
+    }]
