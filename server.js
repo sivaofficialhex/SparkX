@@ -2,7 +2,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 try { for (const l of fs.readFileSync('.env', 'utf8').split('\n')) { const m = l.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/); if (m && !(m[1] in process.env)) process.env[m[1]] = m[2]; } } catch {}
 const PORT = process.env.PORT || 3000;
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 const API = process.env.GEMINI_API_URL || `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const GROQ_API = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
 const PUB = path.join(__dirname, 'public');
@@ -29,13 +29,31 @@ async function chat(req, res) {
   const hist = (Array.isArray(d.conversation) ? d.conversation : []).slice(-20)
     .filter(m => m && (m.role === 'user' || m.role === 'model') && typeof m.text === 'string' && m.text.trim())
     .map(m => ({ role: m.role, parts: [{ text: m.text.slice(0, 2000) }] }));
+  const MODE = { friend: 'Mode: warm, playful friend. Casual and short.', tutor: 'Mode: patient tutor. Explain step by step with simple examples, still easy to hear.', coach: 'Mode: supportive coach. Motivating, practical, clear next steps.' };
+  const LANG = { en: 'Always reply in English.', ta: 'Always reply in Tamil script.', tanglish: 'Always reply in Tanglish (Tamil in English letters).', auto: '' };
+  const LEN = { short: 'Keep replies very short: 1-2 sentences unless asked for more.', normal: '', detailed: 'Give fuller, detailed answers with examples.' };
+  const name = String(d.name || '').replace(/[^\p{L}\p{N} ._-]/gu, '').slice(0, 30);
+  const sys = SYSTEM + '\n' + (MODE[d.mode] || MODE.friend) + '\n' + (LANG[d.lang] || '') + '\n' + (LEN[d.len] || '') + (name ? `\nThe user's name is ${name}.` : '');
   const prov = provider();
   if (!prov) return send(res, 503, { error: 'SparkX is not configured yet (missing GEMINI_API_KEY or GROQ_API_KEY).' });
-  try {
-    const reply = await (prov === 'groq' ? askGroq(msg, hist) : askGemini(msg, hist));
-    if (!reply) return send(res, 502, { error: "I couldn't come up with a reply. Try rephrasing?" });
-    send(res, 200, { reply });
-  } catch (e) { console.error(prov, 'error', e.message); send(res, 502, { error: 'My brain had a hiccup. Please try again.' }); }
+  const order = [prov, prov === 'gemini' ? 'groq' : 'gemini'].filter(p => p === prov || process.env[p.toUpperCase() + '_API_KEY']);
+  let lastStatus = 0;
+  for (const p of order) {
+    for (let i = 0; i < 2; i++) {
+      try {
+        const reply = await (p === 'groq' ? askGroq(msg, hist, sys) : askGemini(msg, hist, sys));
+        if (reply) return send(res, 200, { reply });
+        lastStatus = 0; break;
+      } catch (e) {
+        lastStatus = e.status || 0;
+        console.error(p, 'error', e.message);
+        if (![429, 500, 503, 0].includes(lastStatus)) break;
+        await new Promise(r => setTimeout(r, 1200));
+      }
+    }
+  }
+  const msgs = { 429: 'Too many requests right now. Wait a few seconds and try again.', 503: 'My brain is busy right now. Try again in a moment.', 404: 'My AI model name is wrong. Check GEMINI_MODEL.', 400: 'My AI rejected that request. Check the model and key settings.', 403: 'My API key is not allowed. Check the key.' };
+  send(res, 502, { error: msgs[lastStatus] || 'My brain had a hiccup. Please try again.' });
 }
 
 function provider() {
@@ -44,24 +62,24 @@ function provider() {
   if (want === 'gemini' && process.env.GEMINI_API_KEY) return 'gemini';
   return process.env.GEMINI_API_KEY ? 'gemini' : process.env.GROQ_API_KEY ? 'groq' : null;
 }
-async function askGemini(msg, hist) {
+async function askGemini(msg, hist, sys) {
   const r = await fetch(API, {
     method: 'POST', signal: AbortSignal.timeout(25000),
     headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
-    body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents: [...hist, { role: 'user', parts: [{ text: msg }] }], generationConfig: { temperature: 0.8, maxOutputTokens: 1024 } })
+    body: JSON.stringify({ systemInstruction: { parts: [{ text: sys }] }, contents: [...hist, { role: 'user', parts: [{ text: msg }] }], generationConfig: { temperature: 0.8, maxOutputTokens: 1024 } })
   });
-  if (!r.ok) throw new Error('Gemini status ' + r.status);
+  if (!r.ok) throw Object.assign(new Error('Gemini status ' + r.status), { status: r.status });
   const j = await r.json();
   return (j.candidates?.[0]?.content?.parts || []).map(p => p.text || '').join('').trim();
 }
-async function askGroq(msg, hist) {
-  const messages = [{ role: 'system', content: SYSTEM }, ...hist.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.parts[0].text })), { role: 'user', content: msg }];
+async function askGroq(msg, hist, sys) {
+  const messages = [{ role: 'system', content: sys }, ...hist.map(h => ({ role: h.role === 'model' ? 'assistant' : 'user', content: h.parts[0].text })), { role: 'user', content: msg }];
   const r = await fetch(GROQ_API, {
     method: 'POST', signal: AbortSignal.timeout(25000),
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.GROQ_API_KEY },
     body: JSON.stringify({ model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile', messages, temperature: 0.8, max_tokens: 1024 })
   });
-  if (!r.ok) throw new Error('Groq status ' + r.status);
+  if (!r.ok) throw Object.assign(new Error('Groq status ' + r.status), { status: r.status });
   const j = await r.json();
   return (j.choices?.[0]?.message?.content || '').trim();
 }
